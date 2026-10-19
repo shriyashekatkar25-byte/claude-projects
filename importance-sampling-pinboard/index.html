@@ -1,0 +1,564 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Importance Sampling Pinboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600;700&family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;500&family=STIX+Two+Text:ital@0;1&display=swap">
+<style>
+/* Layout: a Pinterest-style board — masonry "pins" for ideas, wide "lab" boards for live simulations, pastel pins + line-art doodles */
+:root{
+  --bg:#FBFAFD; --card:#FFFFFF; --ink:#2A2233; --ink-soft:#6B6176; --line:#E5DFEC;
+  --blush:#F8DCE3; --powder:#DAE6F6; --butter:#F6EBB5; --pista:#DCEACB; --lilac:#E7DEF6;
+  --rose:#C9386C; --blue:#3567B4; --gold:#9C6F12; --sage:#4F7A3A;
+  --f-display:"Young Serif", Georgia, serif;
+  --f-body:"Figtree", system-ui, -apple-system, sans-serif;
+  --f-hand:"Caveat", "Comic Sans MS", cursive;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --f-math:"STIX Two Text", "Times New Roman", serif;
+  --r-pin:22px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#17131D; --card:#211C29; --ink:#F0EAF6; --ink-soft:#ADA3B9; --line:#3A3245;
+  --blush:#3D2630; --powder:#22304A; --butter:#3A3320; --pista:#25321F; --lilac:#30284A;
+  --rose:#F27BA5; --blue:#8AB1F2; --gold:#E2BC6A; --sage:#9CCB82; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#17131D; --card:#211C29; --ink:#F0EAF6; --ink-soft:#ADA3B9; --line:#3A3245;
+  --blush:#3D2630; --powder:#22304A; --butter:#3A3320; --pista:#25321F; --lilac:#30284A;
+  --rose:#F27BA5; --blue:#8AB1F2; --gold:#E2BC6A; --sage:#9CCB82; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 64px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;text-wrap:balance;margin:0;line-height:1.15}
+h2{font-size:clamp(28px,4vw,40px)}
+h3{font-size:21px}
+p{margin:0}
+.hand{font-family:var(--f-hand);font-size:24px;line-height:1.1;color:var(--rose)}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.math{font-family:var(--f-math);font-style:italic;font-size:1.08em;white-space:nowrap}
+.math .up{font-style:normal}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em;line-height:1.15;margin:0 2px}
+.frac>span:first-child{border-bottom:1px solid currentColor;padding:0 3px}
+.eq{font-family:var(--f-math);font-style:italic;font-size:19px;text-align:center;padding:14px 10px;background:var(--card);border-radius:14px;overflow-x:auto;white-space:nowrap}
+code,pre{font-family:var(--f-mono);font-size:13px}
+button,input,select{font:inherit}
+:focus-visible{outline:2.5px solid var(--rose);outline-offset:3px}
+
+/* ---------- hero ---------- */
+.hero{display:grid;grid-template-columns:1.25fr 1fr;gap:28px;align-items:center}
+.hero-text{display:flex;flex-direction:column;gap:18px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-size:13px;font-weight:600;padding:5px 12px;border-radius:999px;background:var(--lilac);color:var(--ink)}
+.chip.b{background:var(--powder)} .chip.y{background:var(--butter)} .chip.g{background:var(--pista)}
+.hero h1{font-size:clamp(46px,8vw,92px);letter-spacing:-.01em}
+.hero h1 em{font-style:normal;color:var(--rose)}
+.lede{font-size:18px;max-width:58ch;color:var(--ink-soft)}
+.hero-art{position:relative;background:var(--blush);border-radius:28px;padding:22px 18px 16px;min-width:0}
+.hero-art svg{width:100%;height:auto;display:block}
+.affirm{position:absolute;right:-6px;bottom:-22px;background:var(--card);border-radius:16px;padding:12px 16px;max-width:230px;
+  box-shadow:0 10px 30px -12px rgba(40,20,60,.35);transform:rotate(2.5deg)}
+.affirm .hand{font-size:23px;color:var(--ink)}
+
+/* ---------- course map ---------- */
+.map{display:flex;flex-direction:column;gap:14px}
+.map-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.weeks{display:grid;grid-template-columns:repeat(12,minmax(84px,1fr));gap:8px;overflow-x:auto;padding-bottom:6px}
+.wk{border-radius:14px;padding:10px 10px 12px;background:var(--card);border:1px solid var(--line);font-size:12.5px;line-height:1.35;display:flex;flex-direction:column;gap:4px}
+.wk b{font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--ink-soft)}
+.wk.is{background:var(--lilac);border-color:transparent}
+.wk.exam{background:var(--butter);border-color:transparent}
+.wk.now{outline:2.5px solid var(--rose);outline-offset:-2.5px}
+.wk .tag{font-family:var(--f-hand);font-size:18px;color:var(--rose);line-height:1}
+
+/* ---------- section heads ---------- */
+.sec-head{display:flex;flex-direction:column;gap:8px;max-width:70ch}
+
+/* ---------- masonry board ---------- */
+.board{columns:3 290px;column-gap:18px}
+.pin{break-inside:avoid;margin-bottom:22px;display:block}
+.pin-body{border-radius:var(--r-pin);padding:20px;display:flex;flex-direction:column;gap:12px;background:var(--card)}
+.pin.blush .pin-body{background:var(--blush)} .pin.powder .pin-body{background:var(--powder)}
+.pin.butter .pin-body{background:var(--butter)} .pin.pista .pin-body{background:var(--pista)} .pin.lilac .pin-body{background:var(--lilac)}
+.pin-foot{display:flex;justify-content:space-between;align-items:center;padding:8px 6px 0;font-size:13.5px;font-weight:600}
+.pin-foot span:last-child{letter-spacing:2px;color:var(--ink-soft)}
+.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+.steps li::marker{font-family:var(--f-display);color:var(--rose)}
+.check{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.check li{display:flex;gap:10px}
+.check li::before{content:"";flex:none;width:18px;height:18px;margin-top:3px;border-radius:6px;border:2px solid var(--sage);
+  background:linear-gradient(135deg,transparent 45%,var(--sage) 45%,var(--sage) 58%,transparent 58%)}
+.big-quote{font-family:var(--f-display);font-size:26px;line-height:1.2}
+
+/* ---------- labs ---------- */
+.lab{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:clamp(18px,3vw,30px);display:flex;flex-direction:column;gap:20px}
+.lab-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.lab-head>div{display:flex;flex-direction:column;gap:6px;max-width:62ch;min-width:0}
+.lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.lab-grid.three{grid-template-columns:1.2fr 1fr 1fr}
+.plot{display:flex;flex-direction:column;gap:6px;min-width:0}
+.plot canvas{width:100%;height:240px;display:block;border-radius:16px;background:var(--bg)}
+.plot figcaption{font-size:13px;color:var(--ink-soft)}
+figure{margin:0}
+.controls{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center}
+.ctl{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.ctl output{font-family:var(--f-mono);font-weight:500;min-width:44px}
+input[type=range]{accent-color:var(--rose);width:200px;max-width:52vw}
+select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.btn{border:0;cursor:pointer;border-radius:999px;padding:9px 18px;font-weight:700;font-size:14px;background:var(--ink);color:var(--bg)}
+.btn.soft{background:var(--lilac);color:var(--ink)}
+.btn:hover{transform:translateY(-1px)} .btn:active{transform:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--bg);border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.stat span{font-size:12px;color:var(--ink-soft);font-weight:600}
+.stat b{font-family:var(--f-mono);font-weight:500;font-size:18px;font-variant-numeric:tabular-nums}
+.stat.hl{background:var(--blush)} .stat.ok{background:var(--pista)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft)}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+
+/* ---------- code + quiz ---------- */
+.duo{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start}
+.code{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+pre{margin:0;padding:14px;border-radius:14px;background:var(--bg);overflow-x:auto;line-height:1.55}
+pre .c{color:var(--ink-soft)} pre .k{color:var(--rose)} pre .n{color:var(--blue)}
+.quiz{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card-q{border:0;text-align:left;cursor:pointer;border-radius:20px;padding:16px;min-height:150px;display:flex;flex-direction:column;gap:8px;color:var(--ink);background:var(--powder)}
+.card-q:nth-child(2){background:var(--butter)} .card-q:nth-child(3){background:var(--pista)} .card-q:nth-child(4){background:var(--blush)}
+.card-q .q{font-weight:600;font-size:15px}
+.card-q .a{font-size:14.5px}
+.card-q .hint{margin-top:auto;font-family:var(--f-hand);font-size:19px;color:var(--rose)}
+.foot{font-size:13px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:18px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero,.lab-grid,.lab-grid.three,.duo{grid-template-columns:1fr}
+  .affirm{right:10px}
+}
+@media (max-width:520px){ .quiz{grid-template-columns:1fr} .plot canvas{height:210px} }
+@media (prefers-reduced-motion:reduce){ .btn:hover{transform:none} }
+</style>
+
+<div class="wrap">
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="hero-text">
+    <div class="chips">
+      <span class="chip">Stats 102C · Chapter 6</span><span class="chip b">Monte Carlo</span><span class="chip y">Midterm material</span>
+    </div>
+    <h1>Importance <em>Sampling</em></h1>
+    <p class="lede">Estimating expectations by averaging random draws, and what to do when you can't draw from the distribution you care about. Read the pins, then play with the three labs: every number on this page comes from a live simulation in your browser.</p>
+    <p class="hand">sample where it's easy → reweight to where it counts</p>
+  </div>
+  <div class="hero-art" aria-hidden="true">
+    <svg viewBox="0 0 420 250" fill="none">
+      <!-- axes -->
+      <path d="M30 215 H400" stroke="currentColor" stroke-opacity=".35" stroke-width="1.5"/>
+      <!-- g(x): exponential, dashed -->
+      <path d="M32 40 C 70 120, 110 175, 170 196 S 300 212, 400 214" stroke="var(--ink)" stroke-width="3" stroke-dasharray="7 7" stroke-linecap="round"/>
+      <!-- f(x): half normal -->
+      <path d="M32 140 C 70 138, 95 140, 130 152 C 175 168, 210 192, 260 205 S 360 213, 400 214" stroke="var(--blue)" stroke-width="3.5" stroke-linecap="round"/>
+      <!-- weight sprouts -->
+      <g stroke="var(--rose)" stroke-width="2.5" stroke-linecap="round">
+        <path d="M70 215 v-18"/><path d="M110 215 v-30"/><path d="M150 215 v-46"/><path d="M190 215 v-62"/><path d="M230 215 v-78"/>
+      </g>
+      <g fill="var(--rose)"><circle cx="70" cy="195" r="5"/><circle cx="110" cy="183" r="6"/><circle cx="150" cy="167" r="7"/><circle cx="190" cy="151" r="8"/><circle cx="230" cy="135" r="9"/></g>
+      <text x="44" y="32" font-family="Caveat, cursive" font-size="22" fill="var(--ink)">g(x) — easy to draw from</text>
+      <text x="150" y="122" font-family="Caveat, cursive" font-size="22" fill="var(--blue)">f(x) — the one we want</text>
+      <text x="250" y="140" font-family="Caveat, cursive" font-size="20" fill="var(--rose)">weights grow where g is thin</text>
+    </svg>
+    <div class="affirm"><p class="hand">The closer g is to f, the calmer your weights.</p></div>
+  </div>
+</header>
+
+<!-- ================= COURSE MAP ================= -->
+<section class="map" aria-labelledby="map-h">
+  <div class="map-head">
+    <h2 id="map-h" style="font-size:24px">Where this fits in the quarter</h2>
+    <p class="hand" id="countdown" style="font-size:22px"></p>
+  </div>
+  <div class="weeks" id="weeks"></div>
+</section>
+
+<!-- ================= PART 1 ================= -->
+<section style="display:flex;flex-direction:column;gap:22px" aria-labelledby="p1">
+  <div class="sec-head">
+    <span class="eyebrow">Part 1</span>
+    <h2 id="p1">Classical Monte Carlo integration</h2>
+    <p style="color:var(--ink-soft)">Any integral you can write as an average can be estimated by sampling. That one reframing is the engine of the whole chapter.</p>
+  </div>
+
+  <div class="board">
+    <article class="pin blush"><div class="pin-body">
+      <h3>An integral is an average in disguise</h3>
+      <p>The average height of <span class="math">h</span> over <span class="math">(a, b)</span> is the integral divided by the width. Multiply the density of <span class="math">Unif(a, b)</span> into the integrand and the integral becomes an expectation:</p>
+      <div class="eq">∫<sub>a</sub><sup>b</sup> h(x) dx = (b − a) · E[h(X)],&nbsp; X ~ Unif(a, b)</div>
+      <p>So: estimate the expectation, then rescale by the width.</p>
+    </div><div class="pin-foot"><span>The big reframe</span><span>•••</span></div></article>
+
+    <article class="pin"><div class="pin-body">
+      <h3>The simple Monte Carlo recipe</h3>
+      <ol class="steps">
+        <li>Draw <span class="math">X<sup>(1)</sup>, …, X<sup>(n)</sup></span> independently from <span class="math">Unif(a, b)</span>.</li>
+        <li>Evaluate <span class="math">h</span> at every draw.</li>
+        <li>Average them: <span class="math">h̄<sub>n</sub> = <span class="frac"><span>1</span><span>n</span></span> Σ h(X<sup>(i)</sup>)</span>, then report <span class="math">Î<sub>n</sub> = (b − a) h̄<sub>n</sub></span>.</li>
+      </ol>
+    </div><div class="pin-foot"><span>Three steps, every time</span><span>•••</span></div></article>
+
+    <article class="pin powder"><div class="pin-body">
+      <h3>Why it works</h3>
+      <ul class="check">
+        <li><span><b>Unbiased.</b> Each term has mean <span class="math">E[h(X)]</span>, so the average does too.</span></li>
+        <li><span><b>Variance shrinks like 1/n.</b> <span class="math">Var(h̄<sub>n</sub>) = Var[h(X)] / n</span>, and the width factor enters squared for <span class="math">Î<sub>n</sub></span>.</span></li>
+        <li><span><b>Strong LLN:</b> <span class="math">h̄<sub>n</sub></span> converges to the truth almost surely.</span></li>
+        <li><span><b>CLT:</b> the standardized error is approximately <span class="math">N(0, 1)</span>, which gives you error bars.</span></li>
+      </ul>
+    </div><div class="pin-foot"><span>Guarantees</span><span>•••</span></div></article>
+
+    <article class="pin butter"><div class="pin-body">
+      <h3>Error bars from the same draws</h3>
+      <p>Estimate the variance of the average with the spread of your own samples:</p>
+      <div class="eq">v<sub>n</sub> = <span class="frac"><span>1</span><span>n²</span></span> Σ (h(X<sup>(i)</sup>) − h̄<sub>n</sub>)²</div>
+      <p>Then <span class="math">h̄<sub>n</sub> ± 1.96√v<sub>n</sub></span> is an approximate 95% band. Watch it pinch inward in Lab 1.</p>
+    </div><div class="pin-foot"><span>Monte Carlo error</span><span>•••</span></div></article>
+
+    <article class="pin lilac"><div class="pin-body">
+      <h3>Probabilities are expectations too</h3>
+      <p>For <span class="math">Z ~ N(0,1)</span>, the CDF has no closed form. But the indicator <span class="math">I(Z ≤ x)</span> is a Bernoulli variable with success probability <span class="math">F(x)</span>, so</p>
+      <div class="eq">F(x) = E[ I(Z ≤ x) ]</div>
+      <p>The estimate is just the fraction of draws that land at or below <span class="math">x</span>. Its variance is <span class="math">F(x)(1 − F(x))/n</span>, which peaks at <span class="math">F = ½</span>, so <span class="math">1/(4n)</span> is a safe worst case.</p>
+    </div><div class="pin-foot"><span>Example 2 · Normal CDF</span><span>•••</span></div></article>
+
+    <article class="pin pista"><div class="pin-body">
+      <h3>Where uniform sampling struggles</h3>
+      <ul class="check">
+        <li><span>If <span class="math">h</span> is spiky, most uniform draws land where nothing happens, so the estimate is noisy.</span></li>
+        <li><span>There is no uniform distribution on <span class="math">(0, ∞)</span> or <span class="math">(−∞, ∞)</span>.</span></li>
+      </ul>
+      <p>The fix: think in expectations under a general density <span class="math">f</span>. If you can sample from <span class="math">f</span>, the same recipe works with <span class="math">X ~ f</span>.</p>
+    </div><div class="pin-foot"><span>The bridge to Part 2</span><span>•••</span></div></article>
+  </div>
+
+  <!-- LAB 1 -->
+  <section class="lab" aria-labelledby="lab1">
+    <div class="lab-head">
+      <div>
+        <span class="eyebrow">Lab 1 · Example 1</span>
+        <h3 id="lab1">Integrate h(x) = [cos(50x) + sin(20x)]² on (0, 1)</h3>
+        <p style="color:var(--ink-soft);font-size:15px">Each dot is a uniform draw evaluated at <span class="math">h</span>. The right panel tracks the running average and its 95% band as more draws arrive.</p>
+      </div>
+      <div class="controls">
+        <label class="ctl" for="n1">Draws
+          <select id="n1"><option>1000</option><option>5000</option><option selected>10000</option><option>50000</option></select>
+        </label>
+        <button class="btn" id="re1" type="button">Resample</button>
+      </div>
+    </div>
+    <div class="lab-grid">
+      <figure class="plot"><canvas id="c1a" aria-label="h of x with sampled points"></canvas><figcaption>h(x) with the first 400 draws as dots</figcaption></figure>
+      <figure class="plot"><canvas id="c1b" aria-label="running mean with confidence band"></canvas>
+        <figcaption><span class="legend"><span><i style="background:var(--ink)"></i>running mean h̄ₙ</span><span><i style="background:var(--rose);opacity:.5;height:8px"></i>± 1.96√vₙ</span><span><i style="background:var(--gold)"></i>true value</span></span></figcaption></figure>
+    </div>
+    <div class="stats">
+      <div class="stat hl"><span>Estimate</span><b id="s1e">–</b></div>
+      <div class="stat"><span>Std. error √vₙ</span><b id="s1s">–</b></div>
+      <div class="stat"><span>95% interval</span><b id="s1c">–</b></div>
+      <div class="stat ok"><span>True integral</span><b id="s1t">–</b></div>
+    </div>
+  </section>
+
+  <!-- LAB 2 -->
+  <section class="lab" aria-labelledby="lab2">
+    <div class="lab-head">
+      <div>
+        <span class="eyebrow">Lab 2 · Example 2</span>
+        <h3 id="lab2">Estimate the standard normal CDF by counting</h3>
+        <p style="color:var(--ink-soft);font-size:15px">Slide <span class="math">x</span>. Blue ticks are draws that landed at or below it; the estimate is their share of all 10,000 draws.</p>
+      </div>
+      <div class="controls">
+        <label class="ctl" for="x2">x <input id="x2" type="range" min="-3" max="3" step="0.05" value="1"><output id="x2o">1.00</output></label>
+        <button class="btn soft" id="re2" type="button">Resample</button>
+      </div>
+    </div>
+    <figure class="plot"><canvas id="c2" style="height:220px" aria-label="normal density with shaded area"></canvas></figure>
+    <div class="stats">
+      <div class="stat hl"><span>Estimate F̂(x)</span><b id="s2e">–</b></div>
+      <div class="stat ok"><span>True Φ(x)</span><b id="s2t">–</b></div>
+      <div class="stat"><span>SE √(p(1−p)/n)</span><b id="s2s">–</b></div>
+      <div class="stat"><span>Worst-case SE √(1/4n)</span><b>0.00500</b></div>
+    </div>
+  </section>
+</section>
+
+<!-- ================= PART 2 ================= -->
+<section style="display:flex;flex-direction:column;gap:22px" aria-labelledby="p2">
+  <div class="sec-head">
+    <span class="eyebrow">Part 2</span>
+    <h2 id="p2">Importance sampling</h2>
+    <p style="color:var(--ink-soft)">You want <span class="math">E<sub>f</sub>[h(X)]</span> but can't draw from <span class="math">f</span>. Borrow the rejection-sampling idea: find a stand-in you <em>can</em> draw from, then correct for the mismatch.</p>
+  </div>
+
+  <div class="board">
+    <article class="pin lilac"><div class="pin-body">
+      <h3>Pick a trial distribution g</h3>
+      <ul class="check">
+        <li><span><b>Covers f.</b> <span class="math">g(x) &gt; 0</span> everywhere <span class="math">f(x) &gt; 0</span>. Otherwise whole regions are never visited.</span></li>
+        <li><span><b>Easy to sample.</b> Inverse CDF, a built-in generator, anything that works.</span></li>
+      </ul>
+    </div><div class="pin-foot"><span>Two checks before you start</span><span>•••</span></div></article>
+
+    <article class="pin"><div class="pin-body">
+      <h3>The one-line trick</h3>
+      <p>Multiply and divide by <span class="math">g</span>, then read the integral as an expectation under <span class="math">g</span>:</p>
+      <div class="eq">E<sub>f</sub>[h(X)] = ∫ h(x) <span class="frac"><span>f(x)</span><span>g(x)</span></span> g(x) dx = E<sub>g</sub>[ h(X) <span class="frac"><span>f(X)</span><span>g(X)</span></span> ]</div>
+      <p>Outside the support of <span class="math">f</span> the integrand is zero, so extending the integral over all of <span class="math">g</span>'s support changes nothing.</p>
+    </div><div class="pin-foot"><span>Change of measure</span><span>•••</span></div></article>
+
+    <article class="pin blush"><div class="pin-body">
+      <p class="eyebrow">Definition</p>
+      <p class="big-quote">w(x) = f(x) / g(x)</p>
+      <p>The <b>importance weight</b> says how much more (or less) likely a point is under <span class="math">f</span> than under the distribution that actually produced it.</p>
+      <p class="hand" style="font-size:21px">if g = f, every weight is 1 and you're back to plain Monte Carlo</p>
+    </div><div class="pin-foot"><span>Importance weight</span><span>•••</span></div></article>
+
+    <article class="pin powder"><div class="pin-body">
+      <h3>The importance sampling estimator</h3>
+      <ol class="steps">
+        <li>Draw <span class="math">X<sup>(1)</sup>, …, X<sup>(n)</sup> ~ g</span> and compute each weight <span class="math">w(X<sup>(i)</sup>)</span>.</li>
+        <li>Average the weighted values: <span class="math">Ê<sub>f</sub>[h(X)] = <span class="frac"><span>1</span><span>n</span></span> Σ w(X<sup>(i)</sup>) h(X<sup>(i)</sup>)</span>.</li>
+      </ol>
+    </div><div class="pin-foot"><span>Algorithm</span><span>•••</span></div></article>
+
+    <article class="pin butter"><div class="pin-body">
+      <h3>Sanity check: weights average to 1</h3>
+      <div class="eq">E<sub>g</sub>[w(X)] = ∫ <span class="frac"><span>f(x)</span><span>g(x)</span></span> g(x) dx = ∫ f(x) dx = 1</div>
+      <p>So the sample mean of your weights should sit close to 1. If it doesn't, suspect a bug in <span class="math">f</span>, <span class="math">g</span>, or the weight formula.</p>
+    </div><div class="pin-foot"><span>Debugging habit</span><span>•••</span></div></article>
+
+    <article class="pin pista"><div class="pin-body">
+      <h3>Efficiency</h3>
+      <p>The further <span class="math">g</span> strays from <span class="math">f</span>, the more the weights swing, and a few huge weights can dominate the average. A simple score:</p>
+      <div class="eq">Efficiency = 1 / Var<sub>g</sub>[w(X)]</div>
+      <p>Lab 3 plots this against the rate of the exponential proposal so you can see the sweet spot.</p>
+    </div><div class="pin-foot"><span>Choosing g well</span><span>•••</span></div></article>
+
+    <article class="pin lilac"><div class="pin-body">
+      <h3>Example 3 setup</h3>
+      <p>Target: the folded (half) normal, <span class="math">f(x) = √(2/π) e<sup>−x²/2</sup></span> for <span class="math">x ≥ 0</span>, with <span class="math">h(x) = x</span>.</p>
+      <p>Proposal: <span class="math">Exp(λ = 2)</span>, <span class="math">g(x) = 2e<sup>−2x</sup></span>. Same support, and the inverse CDF gives draws.</p>
+      <p>Weight: <span class="math">w(x) = <span class="frac"><span>1</span><span>√(2π)</span></span> exp(−x²/2 + 2x)</span>.</p>
+      <p>Answer to check against: <span class="math">E<sub>f</sub>(X) = √(2/π) ≈ 0.79788</span>, via the substitution <span class="math">u = x²/2</span>.</p>
+    </div><div class="pin-foot"><span>Folded normal</span><span>•••</span></div></article>
+  </div>
+
+  <!-- LAB 3 -->
+  <section class="lab" aria-labelledby="lab3">
+    <div class="lab-head">
+      <div>
+        <span class="eyebrow">Lab 3 · Example 3</span>
+        <h3 id="lab3">Tune the proposal for the folded normal</h3>
+        <p style="color:var(--ink-soft);font-size:15px">Change the rate <span class="math">λ</span> of the exponential proposal. Watch how the weights spread out, and where the estimate stays tight.</p>
+      </div>
+      <div class="controls">
+        <label class="ctl" for="lam">λ <input id="lam" type="range" min="0.3" max="5" step="0.05" value="2"><output id="lamo">2.00</output></label>
+        <button class="btn soft" id="lamLecture" type="button">Lecture's λ = 2</button>
+        <button class="btn soft" id="lamBest" type="button">Most efficient λ</button>
+        <button class="btn" id="re3" type="button">Resample</button>
+      </div>
+    </div>
+    <div class="lab-grid three">
+      <figure class="plot"><canvas id="c3a" aria-label="target f and proposal g"></canvas>
+        <figcaption><span class="legend"><span><i style="background:var(--blue)"></i>f(x) half normal</span><span><i style="background:var(--ink)"></i>g(x) = λe<sup>−λx</sup></span></span></figcaption></figure>
+      <figure class="plot"><canvas id="c3b" aria-label="histogram of importance weights"></canvas><figcaption>Histogram of the 10,000 weights</figcaption></figure>
+      <figure class="plot"><canvas id="c3c" aria-label="variance of weights versus lambda"></canvas><figcaption>Theoretical Var<sub>g</sub>[w] across λ (lower is better)</figcaption></figure>
+    </div>
+    <div class="stats">
+      <div class="stat hl"><span>IS estimate of E(X)</span><b id="s3e">–</b></div>
+      <div class="stat ok"><span>Truth √(2/π)</span><b>0.79788</b></div>
+      <div class="stat"><span>Std. error</span><b id="s3s">–</b></div>
+      <div class="stat"><span>Mean weight</span><b id="s3m">–</b></div>
+      <div class="stat"><span>Var of weights</span><b id="s3v">–</b></div>
+      <div class="stat"><span>Efficiency 1/Var</span><b id="s3f">–</b></div>
+    </div>
+  </section>
+</section>
+
+<!-- ================= CODE + QUIZ ================= -->
+<section class="duo" aria-label="Cheat sheet and self-check">
+  <div class="code">
+    <span class="eyebrow">Cheat sheet</span>
+    <h3>Importance sampling in R</h3>
+    <pre><code><span class="c"># Folded normal mean via an Exp(2) proposal</span>
+<span class="n">set.seed</span>(102)
+n &lt;- 1e4
+x &lt;- <span class="n">rexp</span>(n, rate = 2)              <span class="c"># draws from g</span>
+f_x &lt;- 2 * <span class="n">dnorm</span>(x)                  <span class="c"># target density</span>
+g_x &lt;- <span class="n">dexp</span>(x, rate = 2)             <span class="c"># proposal density</span>
+w &lt;- f_x / g_x                         <span class="c"># importance weights</span>
+
+est &lt;- <span class="n">mean</span>(w * x)
+se &lt;- <span class="n">sd</span>(w * x) / <span class="n">sqrt</span>(n)
+<span class="n">c</span>(estimate = est, se = se, mean_w = <span class="n">mean</span>(w))</code></pre>
+    <p style="font-size:14px;color:var(--ink-soft)">Using <code>dnorm</code> and <code>dexp</code> keeps the weight formula honest; it matches the hand-simplified <span class="math">exp(−x²/2 + 2x)/√(2π)</span>.</p>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <span class="eyebrow">Self-check · tap a card</span>
+    <div class="quiz" id="quiz">
+      <button class="card-q" type="button" data-a="Regions where f has mass but g has none would never be sampled, so the estimator silently misses part of the integral and is biased."><span class="q">Why must g be positive wherever f is?</span><span class="a" hidden></span><span class="hint">tap to flip</span></button>
+      <button class="card-q" type="button" data-a="About 1, because E_g[f/g] = ∫ f = 1. A mean far from 1 points to a mistake in a density or the weight formula."><span class="q">What should the average weight be close to?</span><span class="a" hidden></span><span class="hint">tap to flip</span></button>
+      <button class="card-q" type="button" data-a="All weights equal 1, and the estimator reduces to the simple Monte Carlo average."><span class="q">What happens to the weights if g = f?</span><span class="a" hidden></span><span class="hint">tap to flip</span></button>
+      <button class="card-q" type="button" data-a="√(1/(4·10,000)) = 0.005, so a 95% band is roughly ±0.0098."><span class="q">Worst-case SE of a CDF estimate with n = 10,000?</span><span class="a" hidden></span><span class="hint">tap to flip</span></button>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>Personal study board built from Stats 102C Chapter 6 notes. Course materials are for enrolled students only, so keep this page private.</span>
+  <span class="hand" style="font-size:20px">waffles, friends, work ♡</span>
+</footer>
+</div>
+
+<script>
+(() => {
+  /* ---------- helpers ---------- */
+  const $ = id => document.getElementById(id);
+  const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function rnormGen(r){ let spare=null; return () => { if(spare!==null){const s=spare;spare=null;return s;} let u=r()||1e-12,v=r(); const m=Math.sqrt(-2*Math.log(u)); spare=m*Math.sin(2*Math.PI*v); return m*Math.cos(2*Math.PI*v); }; }
+  function erf(x){ const s=Math.sign(x); x=Math.abs(x); const t=1/(1+0.3275911*x);
+    const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x); return s*y; }
+  const Phi = x => 0.5*(1+erf(x/Math.SQRT2));
+  const fmt = (v,d=5) => Number.isFinite(v) ? v.toFixed(d) : "–";
+  let seedBase = 9999;
+
+  function setup(c){ const r=c.getBoundingClientRect(); const dpr=window.devicePixelRatio||1;
+    c.width=Math.max(1,Math.round(r.width*dpr)); c.height=Math.max(1,Math.round(r.height*dpr));
+    const ctx=c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,r.width,r.height); return {ctx,w:r.width,h:r.height}; }
+  function frame(c,xr,yr,xt,yt,o={}){
+    const {ctx,w,h}=setup(c); const L=o.l??44, R=12, T=12, B=26;
+    const X=x=>L+(x-xr[0])/(xr[1]-xr[0])*(w-L-R), Y=y=>T+(1-(y-yr[0])/(yr[1]-yr[0]))*(h-T-B);
+    ctx.font='11px "JetBrains Mono", monospace'; ctx.fillStyle=tok('--ink-soft'); ctx.strokeStyle=tok('--line'); ctx.lineWidth=1;
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    yt.forEach(v=>{ ctx.beginPath(); ctx.moveTo(L,Y(v)); ctx.lineTo(w-R,Y(v)); ctx.stroke(); ctx.fillText(o.yf?o.yf(v):v,L-6,Y(v)); });
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    xt.forEach(v=>ctx.fillText(o.xf?o.xf(v):v,X(v),h-B+6));
+    ctx.save(); ctx.beginPath(); ctx.rect(L,T-2,w-L-R,h-T-B+4); ctx.clip();
+    return {ctx,X,Y,w,h,done:()=>ctx.restore()};
+  }
+  function alpha(hex,a){ hex=hex.replace('#',''); if(hex.length===3) hex=[...hex].map(c=>c+c).join('');
+    const n=parseInt(hex,16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
+
+  /* ---------- course map ---------- */
+  const weeks=[["Wk 0","9/24","Logistics & intro"],["Wk 1","9/29","Intro · Bayesian stats"],["Wk 2","10/6","Inverse CDF · Rejection"],
+    ["Wk 3","10/13","Rejection · Composition"],["Wk 4","10/20","Importance sampling",1],["Wk 5","10/27","Importance sampling · Midterm 10/29",2],
+    ["Wk 6","11/3","Markov chains"],["Wk 7","11/10","Markov chains · Long run"],["Wk 8","11/17","Long run · Metropolis-Hastings"],
+    ["Wk 9","11/24","Self-study · Thanksgiving"],["Wk 10","12/1","M-H · Gibbs sampler"],["Finals","12/7","Final exam Mon",2]];
+  const starts=["2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19","2026-10-26","2026-11-02","2026-11-09","2026-11-16","2026-11-23","2026-11-30","2026-12-07"];
+  const today=new Date(); const tday=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  let nowIdx=-1; starts.forEach((s,i)=>{ const d=new Date(s+"T00:00:00"); if(tday>=d) nowIdx=i; });
+  $('weeks').innerHTML=weeks.map((w,i)=>`<div class="wk${w[3]===1?' is':''}${w[3]===2?' exam':''}${i===nowIdx?' now':''}"><b>${w[0]} · ${w[1]}</b><span>${w[2]}</span>${i===nowIdx?'<span class="tag">you are here</span>':''}</div>`).join('');
+  const mid=new Date("2026-10-29T00:00:00"); const dd=Math.round((mid-tday)/864e5);
+  $('countdown').textContent = dd>0 ? `${dd} day${dd===1?'':'s'} until the midterm (Thu 10/29)` : dd===0 ? "Midterm is today. You've got this." : "Midterm done. On to Markov chains!";
+
+  /* ---------- Lab 1 ---------- */
+  const h1=x=>{ const v=Math.cos(50*x)+Math.sin(20*x); return v*v; };
+  const trueI=(()=>{ const N=200000; let s=h1(0)+h1(1); for(let i=1;i<N;i++) s+=h1(i/N)*(i%2?4:2); return s/(3*N); })();
+  let L1={};
+  function run1(){ const n=+$('n1').value; const r=mulberry32(seedBase+1); const xs=new Float64Array(n), hs=new Float64Array(n);
+    for(let i=0;i<n;i++){ xs[i]=r(); hs[i]=h1(xs[i]); } L1={n,xs,hs}; draw1(); }
+  function draw1(){ const {n,xs,hs}=L1; if(!n) return;
+    // left: curve + dots
+    let F=frame($('c1a'),[0,1],[0,4],[0,.2,.4,.6,.8,1],[0,1,2,3,4],{l:30});
+    let c=F.ctx; c.strokeStyle=tok('--ink-soft'); c.lineWidth=1.4; c.beginPath();
+    for(let i=0;i<=800;i++){ const x=i/800; i?c.lineTo(F.X(x),F.Y(h1(x))):c.moveTo(F.X(x),F.Y(h1(x))); } c.stroke();
+    c.fillStyle=alpha(tok('--rose'),.7); for(let i=0;i<Math.min(n,400);i++){ c.beginPath(); c.arc(F.X(xs[i]),F.Y(hs[i]),2.6,0,7); c.fill(); }
+    F.done();
+    // right: running mean
+    const step=Math.max(1,Math.floor(n/700)); const pts=[]; let s=0,ss=0;
+    for(let m=1;m<=n;m++){ s+=hs[m-1]; ss+=hs[m-1]*hs[m-1]; if(m>=20 && (m%step===0||m===n)){ const mu=s/m; const v=Math.max(0,(ss/m-mu*mu)/m); pts.push([m,mu,Math.sqrt(v)]); } }
+    const nt=n<=1000?[0,250,500,750,1000]:n<=5000?[0,1000,2000,3000,4000,5000]:n<=10000?[0,2500,5000,7500,10000]:[0,10000,20000,30000,40000,50000];
+    F=frame($('c1b'),[0,n],[0.6,1.4],nt,[0.6,0.8,1,1.2,1.4],{xf:v=>v>=1000?(v/1000)+'k':v});
+    c=F.ctx; c.fillStyle=alpha(tok('--rose'),.22); c.beginPath();
+    pts.forEach((p,i)=>{ const y=F.Y(p[1]+1.96*p[2]); i?c.lineTo(F.X(p[0]),y):c.moveTo(F.X(p[0]),y); });
+    for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; c.lineTo(F.X(p[0]),F.Y(p[1]-1.96*p[2])); } c.closePath(); c.fill();
+    c.setLineDash([6,5]); c.strokeStyle=tok('--gold'); c.lineWidth=1.6; c.beginPath(); c.moveTo(F.X(0),F.Y(trueI)); c.lineTo(F.X(n),F.Y(trueI)); c.stroke(); c.setLineDash([]);
+    c.strokeStyle=tok('--ink'); c.lineWidth=1.8; c.beginPath(); pts.forEach((p,i)=>i?c.lineTo(F.X(p[0]),F.Y(p[1])):c.moveTo(F.X(p[0]),F.Y(p[1]))); c.stroke();
+    F.done();
+    const last=pts[pts.length-1];
+    $('s1e').textContent=fmt(last[1]); $('s1s').textContent=fmt(last[2]);
+    $('s1c').textContent=`${(last[1]-1.96*last[2]).toFixed(3)} – ${(last[1]+1.96*last[2]).toFixed(3)}`; $('s1t').textContent=fmt(trueI);
+  }
+  $('n1').addEventListener('change',run1); $('re1').addEventListener('click',()=>{ seedBase+=7; run1(); });
+
+  /* ---------- Lab 2 ---------- */
+  let Z=null; const N2=10000;
+  function run2(){ const g=rnormGen(mulberry32(seedBase+2)); Z=new Float64Array(N2); for(let i=0;i<N2;i++) Z[i]=g(); draw2(); }
+  function draw2(){ const x0=+$('x2').value; $('x2o').textContent=x0.toFixed(2);
+    const phi=t=>Math.exp(-t*t/2)/Math.sqrt(2*Math.PI);
+    const F=frame($('c2'),[-4,4],[0,0.45],[-4,-3,-2,-1,0,1,2,3,4],[0,0.1,0.2,0.3,0.4],{l:38}); const c=F.ctx;
+    c.fillStyle=alpha(tok('--blue'),.18); c.beginPath(); c.moveTo(F.X(-4),F.Y(0));
+    for(let t=-4;t<=x0;t+=0.02) c.lineTo(F.X(t),F.Y(phi(t))); c.lineTo(F.X(x0),F.Y(phi(x0))); c.lineTo(F.X(x0),F.Y(0)); c.closePath(); c.fill();
+    c.strokeStyle=tok('--ink'); c.lineWidth=2; c.beginPath(); for(let t=-4;t<=4.001;t+=0.02) t>-4?c.lineTo(F.X(t),F.Y(phi(t))):c.moveTo(F.X(t),F.Y(phi(t))); c.stroke();
+    let hit=0; for(let i=0;i<N2;i++) if(Z[i]<=x0) hit++;
+    for(let i=0;i<300;i++){ const z=Z[i]; c.strokeStyle=z<=x0?alpha(tok('--blue'),.85):alpha(tok('--ink-soft'),.45); c.lineWidth=1.2; c.beginPath(); c.moveTo(F.X(z),F.Y(0)); c.lineTo(F.X(z),F.Y(0.035)); c.stroke(); }
+    c.strokeStyle=tok('--rose'); c.lineWidth=2; c.beginPath(); c.moveTo(F.X(x0),F.Y(0)); c.lineTo(F.X(x0),F.Y(0.44)); c.stroke();
+    F.done();
+    const p=hit/N2; $('s2e').textContent=fmt(p); $('s2t').textContent=fmt(Phi(x0)); $('s2s').textContent=fmt(Math.sqrt(p*(1-p)/N2));
+  }
+  $('x2').addEventListener('input',draw2); $('re2').addEventListener('click',()=>{ seedBase+=7; run2(); });
+
+  /* ---------- Lab 3 ---------- */
+  const N3=10000; const fHN=x=>Math.sqrt(2/Math.PI)*Math.exp(-x*x/2);
+  const Ew2=l=>Math.exp(l*l/4)*(1+erf(l/2))/(l*Math.sqrt(Math.PI)); const varW=l=>Ew2(l)-1;
+  const lamBest=(()=>{ let b=2,bv=Infinity; for(let l=0.3;l<=5;l+=0.005){ const v=varW(l); if(v<bv){bv=v;b=l;} } return b; })();
+  let U=null;
+  function run3(){ const r=mulberry32(seedBase+3); U=new Float64Array(N3); for(let i=0;i<N3;i++) U[i]=r(); draw3(); }
+  function draw3(){ const lam=+$('lam').value; $('lamo').textContent=lam.toFixed(2);
+    const X=new Float64Array(N3), W=new Float64Array(N3); let sw=0,sww=0,swx=0,swx2=0;
+    for(let i=0;i<N3;i++){ const x=-Math.log(1-U[i])/lam; const w=fHN(x)/(lam*Math.exp(-lam*x)); X[i]=x; W[i]=w; sw+=w; sww+=w*w; swx+=w*x; swx2+=w*x*w*x; }
+    const mw=sw/N3, vw=sww/N3-mw*mw, est=swx/N3, se=Math.sqrt(Math.max(0,(swx2/N3-est*est))/(N3-1));
+    // densities
+    const ymax=Math.max(lam,0.85)*1.08; const yt=ymax>4?[0,1,2,3,4,5]:ymax>2?[0,1,2,3,4].filter(v=>v<=ymax):[0,0.5,1,1.5,2].filter(v=>v<=ymax);
+    let F=frame($('c3a'),[0,4],[0,ymax],[0,1,2,3,4],yt,{l:32}); let c=F.ctx;
+    c.lineWidth=2.4; c.strokeStyle=tok('--blue'); c.beginPath(); for(let x=0;x<=4.001;x+=0.02) x?c.lineTo(F.X(x),F.Y(fHN(x))):c.moveTo(F.X(x),F.Y(fHN(x))); c.stroke();
+    c.strokeStyle=tok('--ink'); c.setLineDash([7,6]); c.beginPath(); for(let x=0;x<=4.001;x+=0.02){ const y=lam*Math.exp(-lam*x); x?c.lineTo(F.X(x),F.Y(y)):c.moveTo(F.X(x),F.Y(y)); } c.stroke(); c.setLineDash([]);
+    F.done();
+    // weights histogram
+    const sorted=Array.from(W).sort((a,b)=>a-b); const top=Math.max(1.2,sorted[Math.floor(N3*0.995)]); const bins=28, bw=top/bins; const cnt=new Array(bins).fill(0);
+    for(const w of W){ const k=Math.min(bins-1,Math.floor(w/bw)); cnt[k]++; }
+    const dens=cnt.map(k=>k/(N3*bw)); const dm=Math.max(...dens)*1.1;
+    const niceTop=dm>4?Math.ceil(dm):dm>1.5?Math.ceil(dm*2)/2:Math.ceil(dm*5)/5; const ys=[0,niceTop/2,niceTop];
+    const xtop=top; const xts=[0,xtop/2,xtop];
+    F=frame($('c3b'),[0,xtop],[0,niceTop],xts,ys,{l:36,xf:v=>v.toFixed(1),yf:v=>v.toFixed(1)}); c=F.ctx;
+    for(let k=0;k<bins;k++){ const x0=F.X(k*bw)+1, x1=F.X((k+1)*bw)-1; c.fillStyle=alpha(tok('--rose'),.75); c.beginPath(); c.roundRect?c.roundRect(x0,F.Y(dens[k]),Math.max(1,x1-x0),F.Y(0)-F.Y(dens[k]),[4,4,0,0]):c.rect(x0,F.Y(dens[k]),Math.max(1,x1-x0),F.Y(0)-F.Y(dens[k])); c.fill(); }
+    c.strokeStyle=tok('--gold'); c.setLineDash([5,4]); c.lineWidth=1.6; c.beginPath(); c.moveTo(F.X(1),F.Y(0)); c.lineTo(F.X(1),F.Y(niceTop)); c.stroke(); c.setLineDash([]);
+    F.done();
+    // var curve
+    F=frame($('c3c'),[0.3,5],[0,3],[1,2,3,4,5],[0,1,2,3],{l:30}); c=F.ctx;
+    c.strokeStyle=tok('--ink'); c.lineWidth=2.2; c.beginPath(); let started=false;
+    for(let l=0.3;l<=5.001;l+=0.01){ const v=varW(l); const y=F.Y(Math.min(v,3.5)); started?c.lineTo(F.X(l),y):(c.moveTo(F.X(l),y),started=true); } c.stroke();
+    c.strokeStyle=tok('--sage'); c.setLineDash([3,4]); c.lineWidth=1.4; c.beginPath(); c.moveTo(F.X(lamBest),F.Y(0)); c.lineTo(F.X(lamBest),F.Y(3)); c.stroke(); c.setLineDash([]);
+    const vc=varW(lam); c.fillStyle=tok('--rose'); c.beginPath(); c.arc(F.X(lam),F.Y(Math.min(vc,2.95)),6,0,7); c.fill();
+    c.font='600 12px Figtree, sans-serif'; c.fillStyle=tok('--sage'); c.textAlign='left'; c.textBaseline='top'; c.fillText(`best λ ≈ ${lamBest.toFixed(2)}`,Math.min(F.X(lamBest)+6,F.w-110),16);
+    F.done();
+    $('s3e').textContent=fmt(est); $('s3s').textContent=fmt(se); $('s3m').textContent=fmt(mw,4);
+    $('s3v').textContent=`${fmt(vw,3)} (theory ${fmt(vc,3)})`; $('s3f').textContent=fmt(1/vw,2);
+  }
+  $('lam').addEventListener('input',draw3);
+  $('lamLecture').addEventListener('click',()=>{ $('lam').value=2; draw3(); });
+  $('lamBest').addEventListener('click',()=>{ $('lam').value=(Math.round(lamBest*20)/20).toFixed(2); draw3(); });
+  $('re3').addEventListener('click',()=>{ seedBase+=7; run3(); });
+
+  /* ---------- quiz ---------- */
+  document.querySelectorAll('.card-q').forEach(b=>{ const a=b.querySelector('.a'), q=b.querySelector('.q'), h=b.querySelector('.hint'); a.textContent=b.dataset.a;
+    b.addEventListener('click',()=>{ const show=a.hidden; a.hidden=!show; q.style.opacity=show?.55:1; h.textContent=show?'tap to flip back':'tap to flip'; b.setAttribute('aria-pressed',show); }); });
+
+  /* ---------- boot + redraw ---------- */
+  run1(); run2(); run3();
+  const redraw=()=>{ draw1(); draw2(); draw3(); };
+  let t; window.addEventListener('resize',()=>{ clearTimeout(t); t=setTimeout(redraw,120); });
+  try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redraw); }catch(e){}
+  new MutationObserver(redraw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(redraw);
+})();
+</script>
+
+</body></html>
